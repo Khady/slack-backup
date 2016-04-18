@@ -1,0 +1,18 @@
+opam-version: "1.2"
+maintainer: "Louis Roché <louis@louisroche.net>"
+authors: ["Louis Roché <louis@louisroche.net>"]
+homepage: "https://github.com/Khady/slack-backup"
+dev-repo: "git+https://github.com/Khady/slack-backup.git"
+bug-reports: "https://github.com/Khady/slack-backup/issues"
+version: "dev"
+license: "MIT"
+depends: [
+  "ocamlfind" {build}
+  "ocamlbuild" {build}
+  "slacko"
+  "cmdliner"
+]
+build: [
+  make slack-backup
+]
+available: [ ocaml-version >= "4.01" ]
