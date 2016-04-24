@@ -1,37 +1,12 @@
-let error_to_string = function
-  | `Channel_not_found -> "Channel unknown"
-  | `Invalid_auth -> "Invalid token"
-  | `Invalid_ts_latest -> "Invalid_ts_latest"
-  | `Invalid_ts_oldest -> "Invalid_ts_oldest"
-  | `Is_archived -> "Channel is archived"
-  | `Msg_too_long -> "Message too long"
-  | `Not_authed -> "Not_authed"
-  | `Rate_limited -> "Rate limit active"
-  | `Unhandled_error e -> Printf.sprintf "Unhandled error: %s" e
-  | `Unknown_error
-  | _ -> "Unknown error"
+module SB = Slack_backup_lib
 
-let fetch_history ?latest ?count token history channel =
-  let open Lwt in
-  let open Yojson.Basic.Util in
-  let rec fetch ?latest acc =
-    history token ?latest ?oldest:None ?count channel >>= (fun history ->
-        match history with
-        | `Success json ->
-          let has_more = json |> member "has_more" |> to_bool in
-          let messages = json |> member "messages" |> to_list |> List.rev in
-          if has_more then
-            match messages with
-            | [] -> return acc
-            | m::_ ->
-              let latest_ts = m |> member "ts" |> to_string |> float_of_string in
-              fetch ~latest:latest_ts (messages @ acc)
-          else
-            return (messages @ acc)
-        | _ -> return acc       (* TODO: log error? *)
-      )
-  in
-  fetch ?latest []
+type selector =
+  [ `Id of string
+  | `Name of string
+  ]
+
+let selector_to_string = function
+  | (`Id s | `Name s) -> s
 
 let user_id_of_name token name =
   let open Lwt in
@@ -48,44 +23,49 @@ let user_id_of_name token name =
           |> member "id"
           |> to_string
         in
-        Some id
+        Result.Ok (Some id)
       with Not_found ->
-        None
+        Result.Ok None
     end
-  | _ -> None
+  | e -> Result.Error e
 
 let conversation_id_of_selector token =
   let open Lwt in
   let open Yojson.Basic.Util in
   function
-  | `Id id -> return (Some id)
+  | `Id id -> return @@ Result.Ok (Some (Slacko.conversation_of_string id))
   | `Name name ->
     user_id_of_name token name >>= function
-    | None -> return None
-    | Some user_id ->
-      Slacko.im_list token >|= function
-      | `Success json ->
-        let conversations = json |> member "ims" |> to_list in
-        begin try
-            let id =
-              List.find (fun disc_json ->
-                  let u = disc_json |> member "user" |> to_string in
-                  user_id = u
-                ) conversations
-              |> member "id"
-              |> to_string
-            in
-            Some id
-          with Not_found ->
-            None
-        end
-      | _ -> None
+    | (Result.Error _) as e -> return e
+    | Result.Ok uid -> begin
+        match uid with
+        | None -> return @@ Result.Ok None
+        | Some user_id ->
+          Slacko.im_list token >|= function
+          | `Success json ->
+            let conversations = json |> member "ims" |> to_list in
+            begin try
+                let id =
+                  List.find (fun disc_json ->
+                      let u = disc_json |> member "user" |> to_string in
+                      user_id = u
+                    ) conversations
+                  |> member "id"
+                  |> to_string
+                  |> Slacko.conversation_of_string
+                in
+                Result.Ok (Some id)
+              with Not_found ->
+                Result.Ok None
+            end
+          | e -> Result.Error e
+      end
 
 let channel_id_of_selector token =
   let open Lwt in
   let open Yojson.Basic.Util in
   function
-  | `Id id -> return (Some id)
+  | `Id id -> return @@ Result.Ok (Some (Slacko.channel_of_string id))
   | `Name name ->
     Slacko.channels_list token >|= function
     | `Success json ->
@@ -98,72 +78,105 @@ let channel_id_of_selector token =
               ) channels
             |> member "id"
             |> to_string
+            |> Slacko.channel_of_string
           in
-          Some id
+          Result.Ok (Some id)
         with Not_found ->
-          None
+          Result.Ok None
       end
-    | _ -> None
+    | e -> Result.Error e
 
-let get_conversation token conversation_selector count =
+let get_conversation token conversation_selector =
   let open Lwt in
   let token = Slacko.token_of_string token in
   Lwt_main.run begin
-    conversation_id_of_selector token conversation_selector >>= fun channel_id ->
-    match channel_id with
-    | None ->
-      return @@ Printf.printf "Unable to find the id for this conversation.\n"
-    | Some channel_id ->
-      let conversation = Slacko.conversation_of_string channel_id in
-      fetch_history ?count token Slacko.im_history conversation >|= (fun json ->
-          Printf.printf "%s\n" (Yojson.Basic.pretty_to_string (`List json))
-        )
+    conversation_id_of_selector token conversation_selector >>= function
+    | Result.Error e ->
+      return @@
+      Printf.printf "Error while looking for the conversation %s: %s"
+        (selector_to_string conversation_selector)
+        (SB.error_to_string e)
+    | Result.Ok cid -> begin
+        match cid with
+        | None ->
+          return @@ Printf.printf "Unable to find the id for this conversation.\n"
+        | Some conversation_id ->
+          SB.fetch_conversation ~count:1000 token conversation_id >|= (function
+              | Result.Error e ->
+                Printf.printf "Error while fetching the conversation: %s"
+                  (SB.error_to_string e)
+              | Result.Ok json ->
+                Printf.printf "%s\n" (Yojson.Basic.pretty_to_string json)
+            )
+      end
   end
 
-let get_channel token channel_selector count =
+let get_channel token channel_selector =
   let open Lwt in
   let token = Slacko.token_of_string token in
   Lwt_main.run begin
-    channel_id_of_selector token channel_selector >>= fun channel_id ->
-    match channel_id with
-    | None ->
-      return @@ Printf.printf "Unable to find the id for the given channel.\n"
-    | Some channel_id ->
-      let channel = Slacko.channel_of_string channel_id in
-      fetch_history ?count token Slacko.channels_history channel >|= (fun json ->
-          Printf.printf "%s\n" (Yojson.Basic.pretty_to_string (`List json))
-        )
+    channel_id_of_selector token channel_selector >>= function
+    | Result.Error e ->
+      return @@
+      Printf.printf "Error while looking for the channel %s: %s"
+        (selector_to_string channel_selector)
+        (SB.error_to_string e)
+    | Result.Ok cid -> begin
+        match cid with
+        | None ->
+          return @@ Printf.printf "Unable to find the id for the given channel.\n"
+        | Some channel_id ->
+          SB.fetch_channel ~count:1000 token channel_id >|= (function
+              | Result.Error e ->
+                Printf.printf "Error while fetching the channel: %s"
+                  (SB.error_to_string e)
+              | Result.Ok json ->
+                Printf.printf "%s\n" (Yojson.Basic.pretty_to_string json)
+            )
+      end
   end
 
 let list_users token =
   let open Lwt in
   let token = Slacko.token_of_string token in
-  Slacko.users_list token >|= (fun c ->
-      match c with
-      | `Success json -> Yojson.Basic.pretty_to_string json |> Printf.printf "%s\n"
-      | e -> Printf.printf "%s\n" (error_to_string e)
-    )
-  |> Lwt_main.run
+  Lwt_main.run begin
+    Slacko.users_list token >|= (fun c ->
+        match c with
+        | `Success json ->
+          Yojson.Basic.pretty_to_string json |> Printf.printf "%s\n"
+        | e ->
+          Printf.printf "Error while fetching the list of users: %s\n"
+            (SB.error_to_string e)
+      )
+  end
 
 let list_channels token exclude_archived =
   let open Lwt in
   let token = Slacko.token_of_string token in
-  Slacko.channels_list ~exclude_archived token >|= (fun c ->
-      match c with
-      | `Success json -> Yojson.Basic.pretty_to_string json |> Printf.printf "%s\n"
-      | e -> Printf.printf "%s\n" (error_to_string e)
-    )
-  |> Lwt_main.run
+  Lwt_main.run begin
+    Slacko.channels_list ~exclude_archived token >|= (fun c ->
+        match c with
+        | `Success json ->
+          Yojson.Basic.pretty_to_string json |> Printf.printf "%s\n"
+        | e ->
+          Printf.printf "Error while fetching the list of channels: %s\n"
+            (SB.error_to_string e)
+      )
+  end
 
 let list_conversations token =
   let open Lwt in
   let token = Slacko.token_of_string token in
-  Slacko.im_list token >|= (fun c ->
-      match c with
-      | `Success json -> Yojson.Basic.pretty_to_string json |> Printf.printf "%s\n"
-      | e -> Printf.printf "%s\n" (error_to_string e)
-    )
-  |> Lwt_main.run
+  Lwt_main.run begin
+    Slacko.im_list token >|= (fun c ->
+        match c with
+        | `Success json ->
+          Yojson.Basic.pretty_to_string json |> Printf.printf "%s\n"
+        | e ->
+          Printf.printf "Error while fetching the list of conversations: %s\n"
+            (SB.error_to_string e)
+      )
+  end
 
 open Cmdliner
 
@@ -213,18 +226,14 @@ let conversation_selector =
 let channel_selector =
   Term.(ret (const discussion_kind $ channel_name $ channel_id))
 
-let count =
-  let doc = "Number of messages to get in each call to the slack API (must be between 1 and 1000)" in
-  Arg.(value & opt (some int) (Some 100) & info ["count"] ~docv:"COUNT" ~doc) (* TODO: convertor min max *)
-
 let conversation =
   let info = Term.info "conversation" ~doc:"Archive an IM conversation" in
-  let term = Term.(const get_conversation $ token $ conversation_selector $ count) in
+  let term = Term.(const get_conversation $ token $ conversation_selector) in
   term, info
 
 let channel =
   let info = Term.info "channel" ~doc:"Archive a channel conversation" in
-  let term = Term.(const get_channel $ token $ channel_selector $ count) in
+  let term = Term.(const get_channel $ token $ channel_selector) in
   term, info
 
 let list_users =
@@ -256,7 +265,12 @@ let help =
 
 let () =
   match Term.eval_choice ~catch:true help
-          [conversation; channel; list_users; list_channels; list_conversations]
+          [ conversation
+          ; channel
+          ; list_users
+          ; list_channels
+          ; list_conversations
+          ]
   with
   | `Error _ -> exit 1
   | _ -> exit 0

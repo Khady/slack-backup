@@ -1,0 +1,24 @@
+Name:        slack-backup
+Version:     0.1
+Synopsis:    Small tool to backup IM and channels from slack.
+Authors:     Louis Roché <louis@louisroche.net>
+Maintainers: Louis Roché <louis@louisroche.net>
+License:     MIT
+
+Description: Binary and library to backup IM and channels from slack.
+Homepage: https://github.com/Khady/slack-backup
+
+OASISFormat: 0.4
+BuildTools: ocamlbuild
+Plugins: DevFiles (0.4), META (0.4)
+
+Library slack_backup_lib
+  Path:            lib
+  Modules:         Slack_backup_lib
+  BuildDepends:    slacko, result
+
+Executable slack_backup
+  Path:           src
+  MainIs:         slack_backup.ml
+  CompiledObject: best
+  BuildDepends:   slack_backup_lib, cmdliner, result
