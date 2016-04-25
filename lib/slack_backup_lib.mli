@@ -10,7 +10,10 @@ val error_to_string :
   | `Rate_limited
   | `Success of 'a
   | `Unhandled_error of string
-  | `Unknown_error ] ->
+  | `Unknown_error
+  | `User_not_found
+  | `User_not_visible
+  ] ->
   string
 (** Convert a slacko error to a string. *)
 
@@ -33,3 +36,21 @@ val fetch_channel :
   Slacko.token ->
   Slacko.channel ->
   (Yojson.Basic.json, Slacko.history_result) Result.result Lwt.t
+
+val string_id_of_user :
+  Slacko.token ->
+  Slacko.user ->
+  (string,
+   [> Slacko.authed_result | Slacko.user_error | Slacko.user_visibility_error ]
+  ) Result.result Lwt.t
+
+val conversation_of_user :
+  Slacko.token ->
+  Slacko.user ->
+  (Slacko.conversation,
+   [> Slacko.authed_result
+   | Slacko.user_error
+   | Slacko.user_visibility_error
+   | Slacko.channel_error
+   ]
+  ) Result.result Lwt.t
