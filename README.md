@@ -10,7 +10,7 @@ $ slack-backup list-channels
 C04UL8631 -- general
 C04UL8637 -- random
 $ slack-backup channel --name #general > general.json
-$ slack-backup channel --id C04UL8637 > general-with-id.json
+$ slack-backup channel --id C04UL8637 > random-with-id.json
 $ slack-backup conversation --name slackbot > slackot.json
 ```
 
