@@ -1,5 +1,8 @@
 module SB = Slack_backup_lib
 
+let display_json json =
+  Printf.printf "%s\n" (Yojson.Basic.pretty_to_string json)
+
 type selector =
   [ `Id of string
   | `Name of string
@@ -34,7 +37,7 @@ let get_conversation token conversation_selector =
         Printf.printf "Error while fetching the conversation: %s\n"
           (SB.error_to_string e)
       | Result.Ok json ->
-        Printf.printf "%s\n" (Yojson.Basic.pretty_to_string json)
+        display_json json
   end
 
 let get_channel token channel_selector =
@@ -46,43 +49,91 @@ let get_channel token channel_selector =
       Printf.printf "Error while fetching the channel: %s\n"
         (SB.error_to_string e)
     | Result.Ok json ->
-      Printf.printf "%s\n" (Yojson.Basic.pretty_to_string json)
+      display_json json
   end
 
-let list_users token =
+let display_id_name l =
+  let open Yojson.Basic.Util in
+  List.iter (fun json ->
+      let id = json |> member "id" |> to_string in
+      let name = json |> member "name" |> to_string in
+      Printf.printf "%s -- %s\n" id name
+    ) l
+
+let list_users token raw =
   let open Lwt in
   Lwt_main.run begin
     Slacko.users_list token >|= fun c ->
     match c with
     | `Success json ->
-      Yojson.Basic.pretty_to_string json |> Printf.printf "%s\n"
+      if raw then
+        display_json json
+      else
+        json
+        |> Yojson.Basic.Util.member "members"
+        |> Yojson.Basic.Util.to_list
+        |> display_id_name
     | e ->
       Printf.printf "Error while fetching the list of users: %s\n"
         (SB.error_to_string e)
   end
 
-let list_channels token exclude_archived =
+let list_channels token exclude_archived raw =
   let open Lwt in
   Lwt_main.run begin
     Slacko.channels_list ~exclude_archived token >|= fun c ->
     match c with
     | `Success json ->
-      Yojson.Basic.pretty_to_string json |> Printf.printf "%s\n"
+      if raw then
+        display_json json
+      else
+        json
+        |> Yojson.Basic.Util.member "channels"
+        |> Yojson.Basic.Util.to_list
+        |> display_id_name
     | e ->
       Printf.printf "Error while fetching the list of channels: %s\n"
         (SB.error_to_string e)
   end
 
-let list_conversations token =
+let display_conversations token json =
+  let open Yojson.Basic.Util in
+  json
+  |> member "ims"
+  |> to_list
+  |> Lwt_list.iter_p (fun json ->
+      let conv_id = json |> member "id" |> to_string in
+      let uid = json |> member "user" |> to_string in
+      let user = Slacko.user_of_string uid in
+      match%lwt Slacko.users_info token user with
+      | `Success user_infos ->
+        let user_name =
+          user_infos
+          |> member "user"
+          |> member "name"
+          |> to_string
+        in
+        Printf.printf "%s -- %s\n" conv_id user_name;
+        Lwt.return ()
+      | e ->
+        Printf.printf "Error while fetching the list of channels: %s\n"
+          (SB.error_to_string e);
+        Lwt.return ()
+    )
+
+let list_conversations token raw =
   let open Lwt in
   Lwt_main.run begin
-    Slacko.im_list token >|= fun c ->
-    match c with
+    match%lwt Slacko.im_list token with
     | `Success json ->
-      Yojson.Basic.pretty_to_string json |> Printf.printf "%s\n"
+      if raw then
+        Lwt.return @@ display_json json
+      else
+        display_conversations token json
     | e ->
       Printf.printf "Error while fetching the list of conversations: %s\n"
-        (SB.error_to_string e)
+        (SB.error_to_string e);
+      return ()
   end
 
 open Cmdliner
@@ -161,10 +212,14 @@ let channel =
   let term = Term.(const get_channel $ token $ channel_selector) in
   term, info
 
+let json =
+  let doc = "output raw json as given by the slack api" in
+  Arg.(value & flag & info ["j"; "json"] ~docv:"JSON" ~doc)
+
 let list_users =
   let doc = "Display the list of users" in
   let info = Term.info "list-users" ~doc in
-  let term = Term.(const list_users $ token) in
+  let term = Term.(const list_users $ token $ json) in
   term, info
 
 let exclude_archived =
@@ -174,13 +229,13 @@ let exclude_archived =
 let list_channels =
   let doc = "Display the list of channels" in
   let info = Term.info "list-channels" ~doc in
-  let term = Term.(const list_channels $ token $ exclude_archived) in
+  let term = Term.(const list_channels $ token $ exclude_archived $ json) in
   term, info
 
 let list_conversations =
   let doc = "Display the list of IM conversations" in
   let info = Term.info "list-conversations" ~doc in
-  let term = Term.(const list_conversations $ token) in
+  let term = Term.(const list_conversations $ token $ json) in
   term, info
 
 let help =
