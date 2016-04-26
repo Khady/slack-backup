@@ -17,11 +17,7 @@ let conversation_of_selector token name =
     SB.conversation_of_user token user
 
 let channel_of_selector token selector =
-  try%lwt
-    let channel = selector |> selector_to_string |> Slacko.channel_of_string in
-    Lwt.return @@ Result.Ok channel
-  with e ->
-    Lwt.return @@ Result.Error (`Unhandled_error (Printexc.to_string e))
+  selector |> selector_to_string |> Slacko.channel_of_string
 
 let get_conversation token conversation_selector =
   let open Lwt in
@@ -44,19 +40,13 @@ let get_conversation token conversation_selector =
 let get_channel token channel_selector =
   let open Lwt in
   Lwt_main.run begin
-    match%lwt channel_of_selector token channel_selector with
+    let channel = channel_of_selector token channel_selector in
+    SB.fetch_channel ~count:1000 token channel >|= function
     | Result.Error e ->
-      Printf.printf "Error while looking for the channel %s: %s\n"
-        (selector_to_string channel_selector)
-        (SB.error_to_string e);
-      return ()
-    | Result.Ok channel ->
-      SB.fetch_channel ~count:1000 token channel >|= function
-      | Result.Error e ->
-        Printf.printf "Error while fetching the channel: %s\n"
-          (SB.error_to_string e)
-      | Result.Ok json ->
-        Printf.printf "%s\n" (Yojson.Basic.pretty_to_string json)
+      Printf.printf "Error while fetching the channel: %s\n"
+        (SB.error_to_string e)
+    | Result.Ok json ->
+      Printf.printf "%s\n" (Yojson.Basic.pretty_to_string json)
   end
 
 let list_users token =
