@@ -7,7 +7,6 @@ license: "MIT"
 homepage: "https://github.com/Khady/slack-backup"
 bug-reports: "https://github.com/Khady/slack-backup/issues"
 build: [
-  ["oasis" "setup"]
   ["ocaml" "setup.ml" "-configure" "--prefix" prefix]
   ["ocaml" "setup.ml" "-build"]
 ]
@@ -16,14 +15,12 @@ remove: [
   ["ocaml" "%{etc}%/slack-backup/_oasis_remove_.ml" "%{etc}%/slack-backup"]
 ]
 build-test: [
-  ["oasis" "setup"]
   ["ocaml" "setup.ml" "-configure" "--enable-tests"]
   ["ocaml" "setup.ml" "-build"]
   ["ocaml" "setup.ml" "-test"]
 ]
 depends: [
   "cmdliner" {build}
-  "oasis" {build & >= "0.4"}
   "ocamlfind" {build}
   "result"
   "slacko"
