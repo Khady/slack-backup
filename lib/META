@@ -1,0 +1,12 @@
+# OASIS_START
+# DO NOT EDIT (digest: 23726111f650873b2f4826e2725e19de)
+version = "0.1"
+description = "Small tool to backup IM and channels from slack."
+requires = "slacko result"
+archive(byte) = "slack_backup_lib.cma"
+archive(byte, plugin) = "slack_backup_lib.cma"
+archive(native) = "slack_backup_lib.cmxa"
+archive(native, plugin) = "slack_backup_lib.cmxs"
+exists_if = "slack_backup_lib.cma"
+# OASIS_STOP
+

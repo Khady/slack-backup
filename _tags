@@ -1,0 +1,30 @@
+# OASIS_START
+# DO NOT EDIT (digest: 0a0f25073e7fcde05e807a13a1643acc)
+# Ignore VCS directories, you can use the same kind of rule outside
+# OASIS_START/STOP if you want to exclude directories that contains
+# useless stuff for the build process
+true: annot, bin_annot
+<**/.svn>: -traverse
+<**/.svn>: not_hygienic
+".bzr": -traverse
+".bzr": not_hygienic
+".hg": -traverse
+".hg": not_hygienic
+".git": -traverse
+".git": not_hygienic
+"_darcs": -traverse
+"_darcs": not_hygienic
+# Library slack_backup_lib
+"lib/slack_backup_lib.cmxs": use_slack_backup_lib
+<lib/*.ml{,i,y}>: pkg_result
+<lib/*.ml{,i,y}>: pkg_slacko
+# Executable slack_backup
+<src/slack_backup.{native,byte}>: pkg_cmdliner
+<src/slack_backup.{native,byte}>: pkg_result
+<src/slack_backup.{native,byte}>: pkg_slacko
+<src/slack_backup.{native,byte}>: use_slack_backup_lib
+<src/*.ml{,i,y}>: pkg_cmdliner
+<src/*.ml{,i,y}>: pkg_result
+<src/*.ml{,i,y}>: pkg_slacko
+<src/*.ml{,i,y}>: use_slack_backup_lib
+# OASIS_STOP
