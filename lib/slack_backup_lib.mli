@@ -54,3 +54,7 @@ val conversation_of_user :
    | Slacko.channel_error
    ]
   ) Result.result Lwt.t
+
+val verify_token :
+  Slacko.token ->
+  (unit, [> Slacko.authed_result ]) Result.result Lwt.t

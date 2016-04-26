@@ -25,7 +25,6 @@ let channel_of_selector token selector =
 
 let get_conversation token conversation_selector =
   let open Lwt in
-  let token = Slacko.token_of_string token in
   Lwt_main.run begin
     match%lwt conversation_of_selector token conversation_selector with
     | Result.Error e ->
@@ -44,14 +43,13 @@ let get_conversation token conversation_selector =
 
 let get_channel token channel_selector =
   let open Lwt in
-  let token = Slacko.token_of_string token in
   Lwt_main.run begin
     match%lwt channel_of_selector token channel_selector with
     | Result.Error e ->
-      return @@
       Printf.printf "Error while looking for the channel %s: %s\n"
         (selector_to_string channel_selector)
-        (SB.error_to_string e)
+        (SB.error_to_string e);
+      return ()
     | Result.Ok channel ->
       SB.fetch_channel ~count:1000 token channel >|= function
       | Result.Error e ->
@@ -63,7 +61,6 @@ let get_channel token channel_selector =
 
 let list_users token =
   let open Lwt in
-  let token = Slacko.token_of_string token in
   Lwt_main.run begin
     Slacko.users_list token >|= fun c ->
     match c with
@@ -76,7 +73,6 @@ let list_users token =
 
 let list_channels token exclude_archived =
   let open Lwt in
-  let token = Slacko.token_of_string token in
   Lwt_main.run begin
     Slacko.channels_list ~exclude_archived token >|= fun c ->
     match c with
@@ -89,7 +85,6 @@ let list_channels token exclude_archived =
 
 let list_conversations token =
   let open Lwt in
-  let token = Slacko.token_of_string token in
   Lwt_main.run begin
     Slacko.im_list token >|= fun c ->
     match c with
@@ -102,13 +97,31 @@ let list_conversations token =
 
 open Cmdliner
 
+let verify_token =
+  let parser_val token =
+    let t = Slacko.token_of_string token in
+    Lwt_unix.run begin
+      match%lwt SB.verify_token t with
+      | Result.Ok () ->
+        Lwt.return @@ `Ok (t)
+      | Result.Error e ->
+        let msg =
+          Printf.sprintf "Error while checking the token: %s"
+            (SB.error_to_string e)
+        in
+        Lwt.return @@ `Error msg
+    end
+  in
+  let printer_val fmt token =
+    Format.fprintf fmt "%s" "secret-valid-token"
+  in
+  parser_val, printer_val
+
 let token =
-  let doc = "The Slack API access token" in
+  let doc = "Slack API token. Can be generated from https://api.slack.com/docs/oauth-test-tokens" in
   let env = Arg.env_var "SLACK_TOKEN" ~doc in
-  Arg.(required
-       & opt (some string) None
-       & info ["t"; "token"] ~env ~docv:"SLACK_TOKEN" ~doc
-      )
+  let info' = Arg.info ~docv:"SLACK_TOKEN" ~doc ~env ["t"; "token"] in
+  Arg.(required & opt (some verify_token) None info')
 
 let channel_name =
   let doc = "Name of the channel you want to backup. Must start with #" in

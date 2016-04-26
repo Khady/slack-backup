@@ -96,3 +96,12 @@ let conversation_of_user token user =
           Result.Error `Channel_not_found
       end
     | e -> Result.Error e
+
+let verify_token token =
+  match%lwt Slacko.auth_test token with
+  | `Success _ ->
+    Lwt.return @@ Result.Ok ()
+  | e ->
+    Lwt.return @@ Result.Error e
+  | exception e ->
+    Lwt.return @@ Result.Error (`Unhandled_error (Printexc.to_string e))
