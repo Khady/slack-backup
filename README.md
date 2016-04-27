@@ -2,6 +2,10 @@
 
 Small OCaml tool to backup channels or conversations from slack.
 
+## Install
+
+`opam install slack-backup`
+
 ## Examples
 
 ```
