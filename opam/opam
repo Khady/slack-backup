@@ -1,6 +1,6 @@
 opam-version: "1.2"
 name: "slack-backup"
-version: "0.1"
+version: "dev"
 maintainer: "Louis Roché <louis@louisroche.net>"
 authors: [ "Louis Roché <louis@louisroche.net>" ]
 license: "MIT"

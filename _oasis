@@ -1,5 +1,5 @@
 Name:        slack-backup
-Version:     0.1
+Version:     dev
 Synopsis:    Small tool to backup IM and channels from slack.
 Authors:     Louis Roché <louis@louisroche.net>
 Maintainers: Louis Roché <louis@louisroche.net>
