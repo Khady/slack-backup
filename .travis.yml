@@ -1,5 +1,6 @@
 language: c
 env:
+  - OCAML=4.02.1
   - OCAML=4.02.3
   - OCAML=4.03.0
 script:
@@ -11,6 +12,6 @@ script:
   - opam switch $OCAML
   - eval `opam config env`
   - opam pin add -n -k path slack-backup .
-  - opam install --deps-only -d -t slack-backup
+  - opam install --deps-only -t slack-backup
   - opam install -d -t -v slack-backup
   - opam remove slack-backup
