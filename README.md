@@ -9,7 +9,7 @@ Small OCaml tool to backup channels or conversations from slack.
 ## Examples
 
 ```
-export SLACK_TOKEN=yoursecrettoken
+$ export SLACK_TOKEN=yoursecrettoken
 $ slack-backup list-channels
 C04UL8631 -- general
 C04UL8637 -- random
